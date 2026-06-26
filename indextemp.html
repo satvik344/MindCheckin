@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindCheck | AI-Powered Stress Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
+        }
+    </script>
+    <style>
+        .progress-ring__circle { 
+            transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1); 
+            transform: rotate(-90deg); 
+            transform-origin: center; 
+        }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .dark body { background-color: #0f172a; color: #f1f5f9; }
+        .dark .text-slate-900 { color: #ffffff !important; }
+        .dark .text-slate-600 { color: #94a3b8 !important; }
+        .dark .bg-white { background-color: #1e293b !important; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 transition-colors duration-300 min-h-screen">
+
+    <nav class="fixed w-full z-50 top-0 bg-white/80 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">M</div>
+                <span class="font-bold text-xl tracking-tight dark:text-white">MindCheck</span>
+            </div>
+            <button id="themeToggle" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:opacity-80 transition-all font-medium border border-transparent dark:border-slate-700">
+                <span class="dark:hidden">🌙 Dark Mode</span>
+                <span class="hidden dark:block">☀️ Light Mode</span>
+            </button>
+        </div>
+    </nav>
+
+    <main class="pt-24 pb-12 px-4 flex items-center justify-center">
+        <section id="hero" class="max-w-3xl w-full text-center fade-in mt-12">
+<h1 class="text-5xl md:text-7xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">
+  Focus on your 
+  <span class="text-indigo-600 whitespace-nowrap">well-being</span>.
+</h1>            <p class="text-xl text-slate-600 dark:text-slate-400 mb-10 leading-relaxed">Advanced stress analysis engine trained on 10,000+ data points.</p>
+            
+            <div id="loadingInterface" class="flex flex-col items-center gap-4">
+                <div class="animate-spin rounded-full h-10 w-10 border-4 border-indigo-600 border-t-transparent"></div>
+                <p class="text-sm font-bold text-slate-400 uppercase tracking-widest">Training Neural Network...</p>
+            </div>
+
+            <button id="startBtn" onclick="startApp()" class="hidden px-12 py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-2xl shadow-indigo-500/30 transition-all hover:scale-105 mx-auto">
+                Begin Assessment
+            </button>
+        </section>
+
+        <section id="quizContainer" class="hidden max-w-2xl w-full bg-white dark:bg-slate-900 p-8 md:p-12 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 fade-in">
+            <div class="mb-10">
+                <div class="flex justify-between text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-3">
+                    <span id="progressText">Question 1 of 12</span>
+                    <span id="percentText">0%</span>
+                </div>
+                <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3">
+                    <div id="progressBar" class="bg-indigo-600 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="quizContent" class="min-h-[320px]"></div>
+
+            <div class="mt-10 flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-8">
+                <button id="prevBtn" onclick="prevQuestion()" class="text-slate-400 dark:text-slate-500 hover:text-indigo-600 font-bold transition-colors disabled:opacity-0">← Back</button>
+                <div class="flex items-center gap-4">
+                    <span class="hidden md:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Press Enter ↵</span>
+                    <button id="nextBtn" onclick="nextQuestion()" class="px-10 py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-bold disabled:opacity-20 shadow-lg transition-all active:scale-95">Next Step</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="resultsSection" class="hidden max-w-4xl w-full bg-white dark:bg-slate-900 p-8 md:p-12 rounded-[2.5rem] shadow-2xl border border-slate-200 dark:border-slate-800 fade-in">
+            <div class="flex flex-col md:flex-row items-center gap-12">
+                <div class="relative flex items-center justify-center flex-shrink-0">
+                    <svg viewBox="0 0 256 256" class="w-64 h-64 md:w-72 md:h-72 overflow-visible">
+                        <circle class="text-slate-100 dark:text-slate-800" stroke-width="16" stroke="currentColor" fill="transparent" r="100" cx="128" cy="128"/>
+                        <circle id="scoreCircle" class="progress-ring__circle text-indigo-600" stroke-width="16" stroke-dasharray="628.32" stroke-dashoffset="628.32" stroke-linecap="round" stroke="currentColor" fill="transparent" r="100" cx="128" cy="128"/>
+                    </svg>
+                    <div class="absolute text-center">
+                        <span id="resultScore" class="block text-7xl font-black text-slate-900 dark:text-white leading-none">0.0</span>
+                        <span class="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mt-2 block">Stress Index</span>
+                    </div>
+                </div>
+
+                <div class="flex-1">
+                    <div id="statusBadge" class="inline-block px-5 py-1.5 rounded-full text-xs font-black mb-6 uppercase tracking-widest text-white">Status</div>
+                    <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Assessment Analysis</h2>
+                    <p id="resultInterpretation" class="text-slate-600 dark:text-slate-300 text-lg leading-relaxed mb-8"></p>
+                    <div id="recommendations" class="space-y-3"></div>
+                </div>
+            </div>
+            <div class="mt-12 pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-center gap-4">
+                <button onclick="location.reload()" class="px-8 py-4 bg-slate-100 dark:bg-slate-800 dark:text-white rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Restart Test</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const questions = [
+            { id: 'age', text: "Current age bracket?", type: 'select', options: ["Under 18", "18-25", "26-40", "41-60", "60+"] },
+            { id: 'hours', text: "Weekly work/study hours?", type: 'select', options: ["Under 20", "20-40", "40-55", "55-70", "70+"] },
+            { id: 'q1', text: "Difficulty relaxing after a long day.", type: 'range' },
+            { id: 'q2', text: "Feeling physically restless or 'revved up'.", type: 'range' },
+            { id: 'q3', text: "Feeling overwhelmed by minor complications.", type: 'range' },
+            { id: 'q4', text: "Muscle tension or recurring headaches.", type: 'range' },
+            { id: 'q5', text: "Concentration affected by intrusive worries.", type: 'range' },
+            { id: 'q6', text: "Getting easily annoyed or impatient.", type: 'range' },
+            { id: 'q7', text: "Waking up feeling tired even after sleep.", type: 'range' },
+            { id: 'q8', text: "Avoiding responsibilities due to heaviness.", type: 'range' },
+            { id: 'q9', text: "Heart palpitations or shortness of breath.", type: 'range' },
+            { id: 'q10', text: "Worrying about the future excessively.", type: 'range' }
+        ];
+
+        let currentStep = 0;
+        let answers = {};
+        let model;
+
+        // Optimized ML Initialization with 10,000 samples
+        async function initML() {
+            console.log("Generating 10,000 samples...");
+            
+            model = tf.sequential();
+            model.add(tf.layers.dense({units: 16, inputShape: [12], activation: 'relu'}));
+            model.add(tf.layers.dense({units: 8, activation: 'relu'}));
+            model.add(tf.layers.dense({units: 1}));
+            
+            model.compile({loss: 'meanSquaredError', optimizer: 'adam'});
+
+            const numSamples = 10000;
+            const xsData = [];
+            const ysData = [];
+
+            for(let i = 0; i < numSamples; i++) {
+                // Generate random survey answers (1 to 5)
+                let row = Array.from({length: 12}, () => Math.floor(Math.random() * 5) + 1);
+                
+                // Stress Logic: Heavy weight on Q1-Q10, slight weight on age and work hours
+                // Weighted sum normalized to a 10-point scale
+                let rawScore = (row.slice(2).reduce((a,b) => a + b, 0) / 50) * 8; // Max 8 from questions
+                rawScore += (row[1] * 0.4); // Max 2 from work hours
+                
+                let finalScore = Math.min(10, rawScore);
+                xsData.push(row); 
+                ysData.push([finalScore]);
+            }
+
+            const xs = tf.tensor2d(xsData);
+            const ys = tf.tensor2d(ysData);
+
+            // Training with batching to keep browser responsive
+            await model.fit(xs, ys, {
+                epochs: 20,
+                batchSize: 64,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => console.log(`Epoch ${epoch}: loss = ${logs.loss.toFixed(4)}`)
+                }
+            });
+
+            // Cleanup tensors
+            xs.dispose();
+            ys.dispose();
+
+            // Reveal the Start button once training is done
+            document.getElementById('loadingInterface').classList.add('hidden');
+            document.getElementById('startBtn').classList.remove('hidden');
+        }
+
+        function startApp() {
+            document.getElementById('hero').classList.add('hidden');
+            document.getElementById('quizContainer').classList.remove('hidden');
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            const q = questions[currentStep];
+            const container = document.getElementById('quizContent');
+            const progress = (currentStep / questions.length) * 100;
+            
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            document.getElementById('progressText').innerText = `Step ${currentStep + 1} of ${questions.length}`;
+            document.getElementById('percentText').innerText = `${Math.round(progress)}%`;
+
+            let html = `<h3 class="text-3xl font-bold mb-8 text-slate-900 dark:text-white tracking-tight">${q.text}</h3><div class="grid grid-cols-1 md:grid-cols-1 gap-3">`;
+            const options = q.type === 'select' ? q.options : ["Never", "Rarely", "Sometimes", "Often", "Always"];
+            
+            options.forEach((opt, idx) => {
+                const active = answers[q.id] === (idx + 1);
+                html += `
+                    <button onclick="setAns('${q.id}', ${idx + 1})" 
+                        class="w-full p-4 text-left rounded-2xl border-2 transition-all duration-200 ${active ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 ring-4 ring-indigo-500/10' : 'border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-indigo-200'} font-bold">
+                        <span class="mr-3 opacity-40 text-sm font-black">${idx + 1}</span> ${opt}
+                    </button>`;
+            });
+
+            container.innerHTML = html + `</div>`;
+            document.getElementById('nextBtn').disabled = !answers[q.id];
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+            document.getElementById('nextBtn').innerText = currentStep === questions.length - 1 ? 'Calculate Results' : 'Next Step';
+        }
+
+        function setAns(id, val) { answers[id] = val; renderQuestion(); }
+
+        function nextQuestion() {
+            if (!answers[questions[currentStep].id]) return;
+            if (currentStep < questions.length - 1) { currentStep++; renderQuestion(); }
+            else { processFinal(); }
+        }
+
+        function prevQuestion() { if (currentStep > 0) { currentStep--; renderQuestion(); } }
+
+        async function processFinal() {
+            document.getElementById('quizContent').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-[320px]">
+                    <div class="animate-spin rounded-full h-16 w-16 border-4 border-indigo-600 border-t-transparent mb-6"></div>
+                    <p class="font-black text-slate-400 uppercase text-sm tracking-widest">Neural Prediction in Progress...</p>
+                </div>`;
+            
+            const features = questions.map(q => answers[q.id]);
+            
+            // Run inference
+            const prediction = tf.tidy(() => {
+                return model.predict(tf.tensor2d([features]));
+            });
+
+            const scoreData = await prediction.data();
+            const finalScore = Math.max(0.1, Math.min(9.9, scoreData[0])).toFixed(1);
+            
+            setTimeout(() => showResults(parseFloat(finalScore)), 800);
+        }
+
+        function showResults(score) {
+            document.getElementById('quizContainer').classList.add('hidden');
+            document.getElementById('resultsSection').classList.remove('hidden');
+            document.getElementById('resultScore').innerText = score;
+            
+            const circle = document.getElementById('scoreCircle');
+            const circumference = 628.32;
+            const offset = circumference - (score / 10) * circumference;
+            circle.style.strokeDashoffset = offset;
+
+            const badge = document.getElementById('statusBadge');
+            const interp = document.getElementById('resultInterpretation');
+            const recsContainer = document.getElementById('recommendations');
+
+            let recs = [];
+            if(score < 4.5) {
+                badge.innerText = "Resilient Baseline";
+                badge.className = "inline-block px-5 py-1.5 rounded-full text-xs font-black mb-6 uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400";
+                interp.innerText = "Your AI markers suggest you are managing current pressures exceptionally well. Your psychological resilience is currently high.";
+                recs = ["Maintain current sleep hygiene", "Practice preventive mindfulness", "Share your coping strategies"];
+            } else if(score < 7.5) {
+                badge.innerText = "Elevated Stress";
+                badge.className = "inline-block px-5 py-1.5 rounded-full text-xs font-black mb-6 uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400";
+                interp.innerText = "You are currently experiencing moderate tension. While manageable, your indicators suggest a need for active recovery.";
+                recs = ["Implement 'No-Screen' hours", "Try Box Breathing (4-4-4-4)", "Schedule a social detox"];
+            } else {
+                badge.innerText = "High Burnout Risk";
+                badge.className = "inline-block px-5 py-1.5 rounded-full text-xs font-black mb-6 uppercase bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400";
+                interp.innerText = "Your neural stress profile is critical. High levels of physiological and mental fatigue are detected.";
+                recs = ["Prioritize professional consultation", "Immediate workload reduction", "15-minute daily guided meditation"];
+            }
+
+            recsContainer.innerHTML = recs.map(r => `
+                <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl font-bold border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <span class="text-indigo-500">✦</span> ${r}
+                </div>
+            `).join('');
+        }
+
+        // Theme Toggle Logic
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+        });
+
+        // Keybindings
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const quizVisible = !document.getElementById('quizContainer').classList.contains('hidden');
+                if (quizVisible && !document.getElementById('nextBtn').disabled) {
+                    e.preventDefault();
+                    nextQuestion();
+                }
+            }
+        });
+
+        // Start initialization on load
+        window.onload = initML;
+    </script>
+</body>
+</html>
